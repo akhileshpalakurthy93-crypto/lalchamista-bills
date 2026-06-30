@@ -62,10 +62,6 @@ export default function App() {
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      }
-    } catch (e) {
-      console.log("Save error:", e);
-    }
     setBills(updated);
   }
 
@@ -83,7 +79,7 @@ export default function App() {
   async function addBill() {
     if (!form.description || !form.amount) return;
     const newBill = { ...form, id: Date.now().toString(), amount: parseFloat(form.amount) };
-    await saveBills([newBill, ...bills]);
+    saveBills([newBill, ...bills]);
     setForm(emptyForm);
     setShowForm(false);
   }
