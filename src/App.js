@@ -1,4 +1,10 @@
+import { createClient } from "@supabase/supabase-js";
 import { useState, useEffect } from "react";
+
+const supabaseUrl = "PASTE_YOUR_PROJECT_URL_HERE";
+const supabaseAnonKey = "PASTE_YOUR_ANON_PUBLIC_KEY_HERE";
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const STORAGE_KEY = "lalchamista-bills";
 const FRIENDS_KEY = "lalchamista-friends";
