@@ -1,8 +1,29 @@
+import {
+  FaBeer,
+  FaBolt,
+  FaCalendarAlt,
+  FaChartPie,
+  FaCocktail,
+  FaCoffee,
+  FaEuroSign,
+  FaFileInvoiceDollar,
+  FaGlassCheers,
+  FaPlus,
+  FaReceipt,
+  FaSearch,
+  FaSignOutAlt,
+  FaTint,
+  FaTrash,
+  FaUserFriends,
+  FaUtensils,
+  FaWineGlassAlt,
+} from "react-icons/fa";
 import { createClient } from "@supabase/supabase-js";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import "./styles.css";
 
-const supabaseUrl = "PASTE_YOUR_PROJECT_URL_HERE";
-const supabaseAnonKey = "PASTE_YOUR_ANON_PUBLIC_KEY_HERE";
+const supabaseUrl = "https://mhlkmokxltyjduqiwesi.supabase.co";
+const supabaseAnonKey = "sb_publishable_Q1mKLr0SAGugLgUOEqUtoQ_jwA-suTz";
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -12,28 +33,92 @@ const FRIENDS_KEY = "lalchamista-friends";
 const categories = [
   "Coffee",
   "Cocktails",
-  "Beer",
+  "Beers",
   "Wine",
-  "Aperitivo",
+  "Bar",
   "Food",
-  "Water Bill",
+  "Water",
+  "Bill",
   "Electricity Bill",
-  "Other",
-];
+] as const;
 
-const categoryMeta = {
-  Coffee: { color: "#c8a96e", icon: "☕" },
-  Cocktails: { color: "#e07b4a", icon: "🍹" },
-  Beer: { color: "#d4a017", icon: "🍺" },
-  Wine: { color: "#9b4b6e", icon: "🍷" },
-  Aperitivo: { color: "#e8834a", icon: "🥂" },
-  Food: { color: "#5a8a5e", icon: "🍽️" },
-  "Water Bill": { color: "#4a90c8", icon: "💧" },
-  "Electricity Bill": { color: "#f0c030", icon: "⚡" },
-  Other: { color: "#7a7a7a", icon: "📋" },
+type Category = (typeof categories)[number];
+type FilterValue = "All" | Category;
+
+type Bill = {
+  id: string;
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  note?: string;
+  friends?: string[];
 };
 
-const emptyForm = {
+type BillForm = {
+  date: string;
+  description: string;
+  category: Category;
+  amount: string;
+  note: string;
+  friends: string[];
+};
+
+type CategoryMeta = {
+  accent: string;
+  soft: string;
+  icon: JSX.Element;
+};
+
+const categoryMeta: Record<Category, CategoryMeta> = {
+  Coffee: {
+    accent: "#c6925b",
+    soft: "rgba(198, 146, 91, 0.16)",
+    icon: <FaCoffee />,
+  },
+  Cocktails: {
+    accent: "#ff8b6a",
+    soft: "rgba(255, 139, 106, 0.16)",
+    icon: <FaCocktail />,
+  },
+  Beers: {
+    accent: "#f4b942",
+    soft: "rgba(244, 185, 66, 0.16)",
+    icon: <FaBeer />,
+  },
+  Wine: {
+    accent: "#b85677",
+    soft: "rgba(184, 86, 119, 0.18)",
+    icon: <FaWineGlassAlt />,
+  },
+  Bar: {
+    accent: "#d9944c",
+    soft: "rgba(217, 148, 76, 0.16)",
+    icon: <FaGlassCheers />,
+  },
+  Food: {
+    accent: "#79b36a",
+    soft: "rgba(121, 179, 106, 0.16)",
+    icon: <FaUtensils />,
+  },
+  Water: {
+    accent: "#64b5f6",
+    soft: "rgba(100, 181, 246, 0.16)",
+    icon: <FaTint />,
+  },
+  Bill: {
+    accent: "#b8b2a4",
+    soft: "rgba(184, 178, 164, 0.14)",
+    icon: <FaReceipt />,
+  },
+  "Electricity Bill": {
+    accent: "#ffd166",
+    soft: "rgba(255, 209, 102, 0.16)",
+    icon: <FaBolt />,
+  },
+};
+
+const emptyForm: BillForm = {
   date: new Date().toISOString().split("T")[0],
   description: "",
   category: "Coffee",
@@ -42,843 +127,811 @@ const emptyForm = {
   friends: [],
 };
 
+function normaliseCategory(category?: string): Category {
+  if (!category) return "Bill";
+
+  const lower = category.toLowerCase().trim();
+
+  if (lower === "beer") return "Beers";
+  if (lower === "aperitivo") return "Bar";
+  if (lower === "water bill") return "Water";
+  if (lower === "electricity") return "Electricity Bill";
+  if (lower === "other") return "Bill";
+
+  const match = categories.find((item) => item.toLowerCase() === lower);
+  return match ?? "Bill";
+}
+
+function formatEuro(value: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+  }).format(value || 0);
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function safeId(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || Date.now().toString()
+  );
+}
+
+function readLocalBills(): Bill[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as Bill[];
+  } catch {
+    return [];
+  }
+}
+
+function readLocalFriends(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(FRIENDS_KEY) || "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalBills(bills: Bill[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(bills));
+}
+
+function writeLocalFriends(friends: string[]) {
+  localStorage.setItem(FRIENDS_KEY, JSON.stringify(friends));
+}
+
 export default function App() {
-  const [bills, setBills] = useState([]);
-  const [friends, setFriends] = useState([]);
-  const [form, setForm] = useState(emptyForm);
+  const [user, setUser] = useState<any>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [friends, setFriends] = useState<string[]>([]);
+  const [form, setForm] = useState<BillForm>(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("All");
-  const [deleteId, setDeleteId] = useState(null);
-  const [activeTab, setActiveTab] = useState("bills"); // "bills" | "friends"
+  const [filter, setFilter] = useState<FilterValue>("All");
+  const [search, setSearch] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"bills" | "friends">("bills");
   const [newFriend, setNewFriend] = useState("");
 
   useEffect(() => {
-    loadData();
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      if (!data.session?.user) setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        if (!session?.user) {
+          setBills([]);
+          setFriends([]);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
-  function loadData() {
-    try {
-      if (typeof localStorage !== "undefined") {
-        const b = localStorage.getItem(STORAGE_KEY);
-        if (b) setBills(JSON.parse(b));
-        const f = localStorage.getItem(FRIENDS_KEY);
-        if (f) setFriends(JSON.parse(f));
-      }
-    } catch (e) {
-      console.log("Storage error:", e);
-      setBills([]);
-      setFriends([]);
+  useEffect(() => {
+    if (user) loadData();
+  }, [user]);
+
+  const filteredBills = useMemo(() => {
+    const lowerSearch = search.trim().toLowerCase();
+
+    return bills.filter((bill) => {
+      const category = normaliseCategory(bill.category);
+      const matchesFilter = filter === "All" || category === filter;
+      const matchesSearch =
+        !lowerSearch ||
+        bill.description.toLowerCase().includes(lowerSearch) ||
+        (bill.note || "").toLowerCase().includes(lowerSearch) ||
+        category.toLowerCase().includes(lowerSearch) ||
+        (bill.friends || []).some((friend) =>
+          friend.toLowerCase().includes(lowerSearch)
+        );
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [bills, filter, search]);
+
+  const totals = useMemo(() => {
+    const total = bills.reduce((sum, bill) => sum + bill.amount, 0);
+    const filteredTotal = filteredBills.reduce(
+      (sum, bill) => sum + bill.amount,
+      0
+    );
+    const utilities = bills
+      .filter((bill) => {
+        const category = normaliseCategory(bill.category);
+        return category === "Water" || category === "Electricity Bill";
+      })
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    const barTotal = bills
+      .filter((bill) => normaliseCategory(bill.category) === "Bar")
+      .reduce((sum, bill) => sum + bill.amount, 0);
+
+    return { total, filteredTotal, utilities, barTotal };
+  }, [bills, filteredBills]);
+
+  async function signUp() {
+    if (!email || !password) {
+      setAuthMessage("Enter email and password first.");
+      return;
     }
-    setLoading(false);
+
+    setAuthBusy(true);
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.signUp({ email, password });
+
+    setAuthBusy(false);
+    if (error) {
+      setAuthMessage(error.message);
+    } else {
+      setAuthMessage(
+        "Account created. Check your email if confirmation is required, then login."
+      );
+      setAuthMode("login");
+    }
   }
 
-  function saveBills(updated: any[]) {
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      }
-    } catch (e) {
-      console.log("Save bills error:", e);
+  async function signIn() {
+    if (!email || !password) {
+      setAuthMessage("Enter email and password first.");
+      return;
     }
+
+    setAuthBusy(true);
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setAuthBusy(false);
+    if (error) setAuthMessage(error.message);
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
+
+  async function loadData() {
+    if (!user) return;
+    setLoading(true);
+
+    try {
+      const { data: billsData, error: billsError } = await supabase
+        .from("bills")
+        .select("data")
+        .order("id", { ascending: false });
+
+      if (billsError) throw billsError;
+
+      const { data: friendsData, error: friendsError } = await supabase
+        .from("friends")
+        .select("data")
+        .order("id", { ascending: true });
+
+      if (friendsError) throw friendsError;
+
+      const loadedBills = (billsData || [])
+        .map((row: { data: Bill }) => row.data)
+        .filter(Boolean);
+      const loadedFriends = (friendsData || [])
+        .map((row: { data: string }) => row.data)
+        .filter(Boolean);
+
+      setBills(loadedBills);
+      setFriends(loadedFriends);
+      writeLocalBills(loadedBills);
+      writeLocalFriends(loadedFriends);
+    } catch (error) {
+      console.log("Supabase load error:", error);
+      setBills(readLocalBills());
+      setFriends(readLocalFriends());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveBills(updated: Bill[]) {
+    if (!user) return;
 
     setBills(updated);
+    writeLocalBills(updated);
+
+    try {
+      await supabase.from("bills").delete().neq("id", "");
+
+      if (updated.length > 0) {
+        const rows = updated.map((bill) => ({
+          id: bill.id,
+          data: bill,
+        }));
+
+        const { error } = await supabase.from("bills").insert(rows);
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.log("Supabase save bills error:", error);
+      alert(
+        "Saved on this device, but online save failed. Check Supabase settings."
+      );
+    }
   }
 
-  function saveFriends(updated: any[]) {
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(FRIENDS_KEY, JSON.stringify(updated));
-      }
-    } catch (e) {
-      console.log("Save friends error:", e);
-    }
+  async function saveFriends(updated: string[]) {
+    if (!user) return;
 
-    setFriends(updated);
+    const uniqueFriends = Array.from(
+      new Set(updated.map((friend) => friend.trim()).filter(Boolean))
+    );
+
+    setFriends(uniqueFriends);
+    writeLocalFriends(uniqueFriends);
+
+    try {
+      await supabase.from("friends").delete().neq("id", "");
+
+      if (uniqueFriends.length > 0) {
+        const rows = uniqueFriends.map((friend) => ({
+          id: safeId(friend),
+          data: friend,
+        }));
+
+        const { error } = await supabase.from("friends").insert(rows);
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.log("Supabase save friends error:", error);
+      alert(
+        "Saved on this device, but online friends save failed. Check Supabase settings."
+      );
+    }
   }
 
   function addBill() {
-    if (!form.description || !form.amount) return;
+    const amount = Number(form.amount.replace(",", "."));
 
-    const newBill = {
-      ...form,
+    if (!form.description.trim() || !Number.isFinite(amount) || amount <= 0) {
+      return;
+    }
+
+    const newBill: Bill = {
       id: Date.now().toString(),
-      amount: parseFloat(form.amount),
+      date: form.date,
+      description: form.description.trim(),
+      category: form.category,
+      amount,
+      note: form.note.trim(),
+      friends: form.friends,
     };
 
     saveBills([newBill, ...bills]);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, date: new Date().toISOString().split("T")[0] });
     setShowForm(false);
   }
-  async function deleteBill(id) {
-    saveBills(bills.filter((b) => b.id !== id));
+
+  function deleteBill(id: string) {
+    saveBills(bills.filter((bill) => bill.id !== id));
     setDeleteId(null);
   }
 
-  async function addFriend() {
+  function addFriend() {
     const name = newFriend.trim();
-    if (!name || friends.includes(name)) return;
+    const alreadyExists = friends.some(
+      (friend) => friend.toLowerCase() === name.toLowerCase()
+    );
+
+    if (!name || alreadyExists) return;
+
     saveFriends([...friends, name]);
     setNewFriend("");
   }
 
-  async function removeFriend(name) {
-    saveFriends(friends.filter((f) => f !== name));
+  function removeFriend(name: string) {
+    saveFriends(friends.filter((friend) => friend !== name));
   }
 
-  function toggleFriendInForm(name) {
-    const current = form.friends || [];
-    const updated = current.includes(name)
-      ? current.filter((f) => f !== name)
-      : [...current, name];
-    setForm({ ...form, friends: updated });
+  function toggleFriendInForm(name: string) {
+    const selected = form.friends.includes(name);
+    setForm({
+      ...form,
+      friends: selected
+        ? form.friends.filter((friend) => friend !== name)
+        : [...form.friends, name],
+    });
   }
 
-  const filtered =
-    filter === "All" ? bills : bills.filter((b) => b.category === filter);
-  const total = filtered.reduce((sum, b) => sum + b.amount, 0);
-  const grandTotal = bills.reduce((sum, b) => sum + b.amount, 0);
+  if (!user) {
+    const isLogin = authMode === "login";
 
-  // Utility bills total
-  const utilityTotal = bills
-    .filter(
-      (b) => b.category === "Water Bill" || b.category === "Electricity Bill"
-    )
-    .reduce((s, b) => s + b.amount, 0);
+    return (
+      <main className="auth-page">
+        <section className="auth-card">
+          <div className="brand-mark">L</div>
+          <p className="eyebrow">Lalchamista</p>
+          <h1>{isLogin ? "Welcome back" : "Create your account"}</h1>
+          <p className="auth-copy">
+            A clean professional bill tracker for coffee, bar, friends and
+            utility expenses.
+          </p>
+
+          <label className="field-label">Email</label>
+          <input
+            className="input"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+
+          <label className="field-label">Password</label>
+          <input
+            className="input"
+            type="password"
+            placeholder="Your password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                isLogin ? signIn() : signUp();
+              }
+            }}
+          />
+
+          {authMessage && <div className="notice">{authMessage}</div>}
+
+          <button
+            className="primary-button wide"
+            onClick={isLogin ? signIn : signUp}
+            disabled={authBusy}
+          >
+            {authBusy ? "Please wait…" : isLogin ? "Login" : "Create account"}
+          </button>
+
+          <button
+            className="ghost-button wide"
+            onClick={() => {
+              setAuthMessage("");
+              setAuthMode(isLogin ? "signup" : "login");
+            }}
+          >
+            {isLogin ? "Create a new account" : "I already have an account"}
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   if (loading) {
     return (
-      <div style={styles.loadingWrap}>
-        <div style={styles.spinner} />
-        <p
-          style={{
-            color: "#c8a96e",
-            fontFamily: "Georgia, serif",
-            marginTop: 16,
-          }}
-        >
-          Loading…
-        </p>
-      </div>
+      <main className="loading-page">
+        <div className="spinner" />
+        <p>Loading your bills…</p>
+      </main>
     );
   }
 
   return (
-    <div style={styles.root}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.logoCircle}>L</div>
-        <div>
-          <div style={styles.logoTitle}>Lalchamista</div>
-          <div style={styles.logoSub}>CAFFÈ · BAR — Bill Tracker</div>
-        </div>
-        <div style={styles.totalBadge}>
-          <div style={styles.totalLabel}>Total Spent</div>
-          <div style={styles.totalAmount}>€{grandTotal.toFixed(2)}</div>
-        </div>
-      </div>
-
-      {/* Quick stats */}
-      <div style={styles.statsRow}>
-        <div style={styles.statBox}>
-          <div style={styles.statIcon}>💧⚡</div>
-          <div style={styles.statValue}>€{utilityTotal.toFixed(2)}</div>
-          <div style={styles.statLabel}>Utilities</div>
-        </div>
-        <div style={styles.statBox}>
-          <div style={styles.statIcon}>🥂</div>
-          <div style={styles.statValue}>
-            €
-            {bills
-              .filter((b) => b.category === "Aperitivo")
-              .reduce((s, b) => s + b.amount, 0)
-              .toFixed(2)}
+    <main className="app-shell">
+      <header className="topbar">
+        <div className="brand-block">
+          <div className="logo-circle">L</div>
+          <div>
+            <p className="eyebrow">Caffè · Bar</p>
+            <h1>Lalchamista</h1>
+            <p className="subtitle">Professional bill tracker</p>
           </div>
-          <div style={styles.statLabel}>Aperitivo</div>
         </div>
-        <div style={styles.statBox}>
-          <div style={styles.statIcon}>👥</div>
-          <div style={styles.statValue}>{friends.length}</div>
-          <div style={styles.statLabel}>Friends</div>
-        </div>
-        <div style={styles.statBox}>
-          <div style={styles.statIcon}>🧾</div>
-          <div style={styles.statValue}>{bills.length}</div>
-          <div style={styles.statLabel}>Bills</div>
-        </div>
-      </div>
 
-      {/* Tabs */}
-      <div style={styles.tabs}>
+        <div className="top-actions">
+          <div className="total-card">
+            <span>Total spent</span>
+            <strong>{formatEuro(totals.total)}</strong>
+          </div>
+          <button className="logout-button" onClick={signOut}>
+            <FaSignOutAlt /> Logout
+          </button>
+        </div>
+      </header>
+
+      <section className="dashboard-grid">
+        <article className="metric-card gold">
+          <div className="metric-icon">
+            <FaEuroSign />
+          </div>
+          <span>Total</span>
+          <strong>{formatEuro(totals.total)}</strong>
+        </article>
+        <article className="metric-card blue">
+          <div className="metric-icon">
+            <FaTint />
+          </div>
+          <span>Utilities</span>
+          <strong>{formatEuro(totals.utilities)}</strong>
+        </article>
+        <article className="metric-card amber">
+          <div className="metric-icon">
+            <FaGlassCheers />
+          </div>
+          <span>Bar</span>
+          <strong>{formatEuro(totals.barTotal)}</strong>
+        </article>
+        <article className="metric-card green">
+          <div className="metric-icon">
+            <FaUserFriends />
+          </div>
+          <span>Friends</span>
+          <strong>{friends.length}</strong>
+        </article>
+      </section>
+
+      <nav className="tabs">
         <button
+          className={activeTab === "bills" ? "tab active" : "tab"}
           onClick={() => setActiveTab("bills")}
-          style={{
-            ...styles.tab,
-            ...(activeTab === "bills" ? styles.tabActive : {}),
-          }}
         >
-          Bills
+          <FaReceipt /> Bills
         </button>
         <button
+          className={activeTab === "friends" ? "tab active" : "tab"}
           onClick={() => setActiveTab("friends")}
-          style={{
-            ...styles.tab,
-            ...(activeTab === "friends" ? styles.tabActive : {}),
-          }}
         >
-          Friends{" "}
+          <FaUserFriends /> Friends
           {friends.length > 0 && (
-            <span style={styles.badge}>{friends.length}</span>
+            <span className="tab-badge">{friends.length}</span>
           )}
         </button>
-      </div>
+      </nav>
 
-      {/* ── BILLS TAB ── */}
       {activeTab === "bills" && (
-        <>
-          {/* Filter + Add */}
-          <div style={styles.actionRow}>
-            <div style={styles.filterRow}>
-              {["All", ...categories].map((cat) => {
-                const meta = categoryMeta[cat];
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setFilter(cat)}
-                    style={{
-                      ...styles.filterBtn,
-                      background:
-                        filter === cat
-                          ? meta?.color || "#c8a96e"
-                          : "transparent",
-                      color:
-                        filter === cat ? "#1a1a0f" : meta?.color || "#c8a96e",
-                      borderColor: meta?.color || "#c8a96e",
-                    }}
-                  >
-                    {meta?.icon && (
-                      <span style={{ marginRight: 3 }}>{meta.icon}</span>
-                    )}
-                    {cat}
-                  </button>
-                );
-              })}
+        <section className="content-card">
+          <div className="toolbar">
+            <div className="search-box">
+              <FaSearch />
+              <input
+                type="search"
+                placeholder="Search bills, notes, friends…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </div>
             <button
-              onClick={() => setShowForm(!showForm)}
-              style={styles.addBtn}
+              className="primary-button"
+              onClick={() => setShowForm((value) => !value)}
             >
-              {showForm ? "✕ Cancel" : "+ Add Bill"}
+              {showForm ? (
+                "Close"
+              ) : (
+                <>
+                  <FaPlus /> Add bill
+                </>
+              )}
             </button>
           </div>
 
-          {/* Form */}
+          <div className="filter-row">
+            <button
+              className={
+                filter === "All" ? "filter-pill active" : "filter-pill"
+              }
+              onClick={() => setFilter("All")}
+            >
+              <FaChartPie /> All
+            </button>
+
+            {categories.map((category) => {
+              const meta = categoryMeta[category];
+              const active = filter === category;
+
+              return (
+                <button
+                  key={category}
+                  className={active ? "filter-pill active" : "filter-pill"}
+                  onClick={() => setFilter(category)}
+                  style={{
+                    borderColor: meta.accent,
+                    color: active ? "#17140f" : meta.accent,
+                    background: active ? meta.accent : meta.soft,
+                  }}
+                >
+                  {meta.icon} {category}
+                </button>
+              );
+            })}
+          </div>
+
           {showForm && (
-            <div style={styles.formCard}>
-              <div style={styles.formTitle}>New Bill</div>
-              <div style={styles.formGrid}>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Date</label>
-                  <input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    style={styles.input}
-                  />
+            <section className="form-panel">
+              <div className="section-heading">
+                <h2>New bill</h2>
+                <p>Add date, category, amount and optional friends.</p>
+              </div>
+
+              <div className="form-grid">
+                <div>
+                  <label className="field-label">Date</label>
+                  <div className="icon-input">
+                    <FaCalendarAlt />
+                    <input
+                      type="date"
+                      value={form.date}
+                      onChange={(event) =>
+                        setForm({ ...form, date: event.target.value })
+                      }
+                    />
+                  </div>
                 </div>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Category</label>
+
+                <div>
+                  <label className="field-label">Category</label>
                   <select
+                    className="input"
                     value={form.category}
-                    onChange={(e) =>
-                      setForm({ ...form, category: e.target.value })
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        category: event.target.value as Category,
+                      })
                     }
-                    style={styles.input}
                   >
-                    {categories.map((c) => (
-                      <option key={c}>{c}</option>
+                    {categories.map((category) => (
+                      <option key={category}>{category}</option>
                     ))}
                   </select>
                 </div>
-                <div style={{ ...styles.fieldGroup, gridColumn: "1 / -1" }}>
-                  <label style={styles.label}>Description</label>
+
+                <div className="span-two">
+                  <label className="field-label">Description</label>
                   <input
+                    className="input"
                     type="text"
-                    placeholder="e.g. Espresso + Aperol Spritz"
+                    placeholder="e.g. Coffee beans, beers, water bill…"
                     value={form.description}
-                    onChange={(e) =>
-                      setForm({ ...form, description: e.target.value })
+                    onChange={(event) =>
+                      setForm({ ...form, description: event.target.value })
                     }
-                    style={styles.input}
                   />
                 </div>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Amount (€)</label>
+
+                <div>
+                  <label className="field-label">Amount (€)</label>
                   <input
+                    className="input"
                     type="number"
                     placeholder="0.00"
-                    value={form.amount}
-                    onChange={(e) =>
-                      setForm({ ...form, amount: e.target.value })
-                    }
-                    style={styles.input}
                     step="0.01"
                     min="0"
+                    value={form.amount}
+                    onChange={(event) =>
+                      setForm({ ...form, amount: event.target.value })
+                    }
                   />
                 </div>
-                <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Note (optional)</label>
+
+                <div>
+                  <label className="field-label">Note</label>
                   <input
+                    className="input"
                     type="text"
-                    placeholder="Any extra detail…"
+                    placeholder="Optional detail"
                     value={form.note}
-                    onChange={(e) => setForm({ ...form, note: e.target.value })}
-                    style={styles.input}
+                    onChange={(event) =>
+                      setForm({ ...form, note: event.target.value })
+                    }
                   />
                 </div>
+              </div>
 
-                {/* Friends picker */}
-                {friends.length > 0 && (
-                  <div style={{ ...styles.fieldGroup, gridColumn: "1 / -1" }}>
-                    <label style={styles.label}>With friends</label>
-                    <div style={styles.friendPicker}>
-                      {friends.map((f) => {
-                        const selected = (form.friends || []).includes(f);
-                        return (
-                          <button
-                            key={f}
-                            onClick={() => toggleFriendInForm(f)}
-                            style={{
-                              ...styles.friendChip,
-                              background: selected ? "#3a5a3a" : "#2a2a18",
-                              borderColor: selected ? "#5a8a5e" : "#3a3a28",
-                              color: selected ? "#a0d0a0" : "#888",
-                            }}
-                          >
-                            👤 {f}
-                          </button>
-                        );
-                      })}
-                    </div>
+              {friends.length > 0 && (
+                <div className="friend-picker-wrap">
+                  <label className="field-label">With friends</label>
+                  <div className="friend-picker">
+                    {friends.map((friend) => {
+                      const selected = form.friends.includes(friend);
+                      return (
+                        <button
+                          key={friend}
+                          className={
+                            selected ? "friend-chip selected" : "friend-chip"
+                          }
+                          onClick={() => toggleFriendInForm(friend)}
+                        >
+                          {friend[0].toUpperCase()} {friend}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
               <button
+                className="primary-button wide"
                 onClick={addBill}
-                disabled={!form.description || !form.amount}
-                style={{
-                  ...styles.saveBtn,
-                  opacity: !form.description || !form.amount ? 0.4 : 1,
-                }}
+                disabled={!form.description.trim() || !form.amount}
               >
-                Save Bill
+                Save bill
               </button>
-            </div>
+            </section>
           )}
 
-          {/* Summary strip */}
-          {filter !== "All" && (
-            <div style={styles.summaryStrip}>
-              <span style={{ color: "#aaa" }}>
-                {categoryMeta[filter]?.icon}{" "}
-                <b style={{ color: categoryMeta[filter]?.color || "#c8a96e" }}>
-                  {filter}
-                </b>
-              </span>
-              <span style={{ color: "#c8a96e", fontWeight: "bold" }}>
-                {filtered.length} bill{filtered.length !== 1 ? "s" : ""} · €
-                {total.toFixed(2)}
-              </span>
-            </div>
-          )}
+          <div className="list-summary">
+            <span>
+              {filter === "All" ? "All categories" : filter} ·{" "}
+              {filteredBills.length} bill
+              {filteredBills.length !== 1 ? "s" : ""}
+            </span>
+            <strong>{formatEuro(totals.filteredTotal)}</strong>
+          </div>
 
-          {/* Bills list */}
-          {filtered.length === 0 ? (
-            <div style={styles.empty}>
-              <div style={styles.emptyIcon}>🧾</div>
-              <div style={styles.emptyText}>
-                No bills yet{filter !== "All" ? ` in ${filter}` : ""}.
-              </div>
-              <div style={styles.emptyHint}>
-                Tap "+ Add Bill" to log your first one.
-              </div>
+          {filteredBills.length === 0 ? (
+            <div className="empty-state">
+              <FaFileInvoiceDollar />
+              <h3>No bills found</h3>
+              <p>Add your first bill or change the filter/search.</p>
             </div>
           ) : (
-            <div style={styles.list}>
-              {filtered.map((bill) => {
-                const meta = categoryMeta[bill.category] || {
-                  color: "#7a7a7a",
-                  icon: "📋",
-                };
+            <div className="bill-list">
+              {filteredBills.map((bill) => {
+                const category = normaliseCategory(bill.category);
+                const meta = categoryMeta[category];
+
                 return (
-                  <div key={bill.id} style={styles.card}>
-                    <div style={{ ...styles.catIcon }}>{meta.icon}</div>
-                    <div style={styles.cardBody}>
-                      <div style={styles.cardTop}>
-                        <span style={styles.cardDesc}>{bill.description}</span>
-                        <span
-                          style={{ ...styles.cardAmount, color: meta.color }}
-                        >
-                          €{bill.amount.toFixed(2)}
-                        </span>
+                  <article className="bill-card" key={bill.id}>
+                    <div
+                      className="bill-icon"
+                      style={{ color: meta.accent, background: meta.soft }}
+                    >
+                      {meta.icon}
+                    </div>
+
+                    <div className="bill-main">
+                      <div className="bill-topline">
+                        <h3>{bill.description}</h3>
+                        <strong style={{ color: meta.accent }}>
+                          {formatEuro(bill.amount)}
+                        </strong>
                       </div>
-                      <div style={styles.cardMeta}>
-                        <span style={{ color: meta.color }}>
-                          {bill.category}
-                        </span>
-                        <span style={styles.dot}>·</span>
-                        <span>
-                          {new Date(bill.date + "T12:00:00").toLocaleDateString(
-                            "en-GB",
-                            { day: "numeric", month: "short", year: "numeric" }
-                          )}
-                        </span>
+                      <div className="bill-meta">
+                        <span style={{ color: meta.accent }}>{category}</span>
+                        <span>·</span>
+                        <span>{formatDate(bill.date)}</span>
                         {bill.note && (
                           <>
-                            <span style={styles.dot}>·</span>
-                            <span style={{ fontStyle: "italic" }}>
-                              {bill.note}
-                            </span>
+                            <span>·</span>
+                            <span>{bill.note}</span>
                           </>
                         )}
-                        {bill.friends?.length > 0 && (
+                        {bill.friends && bill.friends.length > 0 && (
                           <>
-                            <span style={styles.dot}>·</span>
-                            <span style={{ color: "#5a8a5e" }}>
-                              👥 {bill.friends.join(", ")}
+                            <span>·</span>
+                            <span className="friend-text">
+                              <FaUserFriends /> {bill.friends.join(", ")}
                             </span>
                           </>
                         )}
                       </div>
                     </div>
+
                     {deleteId === bill.id ? (
-                      <div style={styles.confirmDelete}>
-                        <button
-                          onClick={() => deleteBill(bill.id)}
-                          style={styles.confirmYes}
-                        >
+                      <div className="delete-confirm">
+                        <button onClick={() => deleteBill(bill.id)}>
                           Delete
                         </button>
-                        <button
-                          onClick={() => setDeleteId(null)}
-                          style={styles.confirmNo}
-                        >
-                          Keep
-                        </button>
+                        <button onClick={() => setDeleteId(null)}>Keep</button>
                       </div>
                     ) : (
                       <button
+                        className="icon-button danger"
                         onClick={() => setDeleteId(bill.id)}
-                        style={styles.deleteBtn}
+                        aria-label="Delete bill"
                       >
-                        ✕
+                        <FaTrash />
                       </button>
                     )}
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
-        </>
+        </section>
       )}
 
-      {/* ── FRIENDS TAB ── */}
       {activeTab === "friends" && (
-        <div style={{ padding: "20px 24px" }}>
-          <div style={styles.formTitle}>Your Friends</div>
+        <section className="content-card">
+          <div className="section-heading">
+            <h2>Friends</h2>
+            <p>Add friends here, then tag them when you save a bill.</p>
+          </div>
 
-          {/* Add friend */}
-          <div style={styles.friendAddRow}>
+          <div className="friend-add-row">
             <input
+              className="input"
               type="text"
               placeholder="Friend's name…"
               value={newFriend}
-              onChange={(e) => setNewFriend(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addFriend()}
-              style={{ ...styles.input, flex: 1 }}
+              onChange={(event) => setNewFriend(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && addFriend()}
             />
             <button
+              className="primary-button"
               onClick={addFriend}
               disabled={!newFriend.trim()}
-              style={{
-                ...styles.addBtn,
-                opacity: !newFriend.trim() ? 0.4 : 1,
-              }}
             >
-              Add
+              <FaPlus /> Add
             </button>
           </div>
 
           {friends.length === 0 ? (
-            <div style={styles.empty}>
-              <div style={styles.emptyIcon}>👥</div>
-              <div style={styles.emptyText}>No friends added yet.</div>
-              <div style={styles.emptyHint}>
-                Add names above to tag them on bills.
-              </div>
+            <div className="empty-state">
+              <FaUserFriends />
+              <h3>No friends yet</h3>
+              <p>Add names to track bills with friends.</p>
             </div>
           ) : (
-            <div
-              style={{
-                marginTop: 16,
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              {friends.map((f) => {
-                const theirBills = bills.filter((b) => b.friends?.includes(f));
-                const theirTotal = theirBills.reduce((s, b) => s + b.amount, 0);
+            <div className="friends-list">
+              {friends.map((friend) => {
+                const friendBills = bills.filter((bill) =>
+                  bill.friends?.includes(friend)
+                );
+                const friendTotal = friendBills.reduce(
+                  (sum, bill) => sum + bill.amount,
+                  0
+                );
+
                 return (
-                  <div key={f} style={styles.friendCard}>
-                    <div style={styles.friendAvatar}>{f[0].toUpperCase()}</div>
-                    <div style={styles.friendInfo}>
-                      <div style={styles.friendName}>{f}</div>
-                      <div style={styles.friendStats}>
-                        {theirBills.length} bill
-                        {theirBills.length !== 1 ? "s" : ""} together
-                        {theirBills.length > 0 && (
-                          <span style={{ color: "#c8a96e" }}>
-                            {" "}
-                            · €{theirTotal.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
+                  <article className="friend-card" key={friend}>
+                    <div className="friend-avatar">
+                      {friend[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <h3>{friend}</h3>
+                      <p>
+                        {friendBills.length} bill
+                        {friendBills.length !== 1 ? "s" : ""}
+                        {friendBills.length > 0 &&
+                          ` · ${formatEuro(friendTotal)}`}
+                      </p>
                     </div>
                     <button
-                      onClick={() => removeFriend(f)}
-                      style={styles.deleteBtn}
-                      title="Remove"
+                      className="icon-button danger"
+                      onClick={() => removeFriend(friend)}
+                      aria-label={`Remove ${friend}`}
                     >
-                      ✕
+                      <FaTrash />
                     </button>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
-    </div>
+    </main>
   );
 }
-
-const styles = {
-  root: {
-    minHeight: "100vh",
-    background: "#141410",
-    color: "#e8e0d0",
-    fontFamily: "'Segoe UI', system-ui, sans-serif",
-    paddingBottom: 60,
-  },
-  loadingWrap: {
-    minHeight: "100vh",
-    background: "#141410",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  spinner: {
-    width: 36,
-    height: 36,
-    border: "3px solid #333",
-    borderTop: "3px solid #c8a96e",
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-  },
-  header: {
-    background: "linear-gradient(135deg, #1e1e14 0%, #2a2a18 100%)",
-    borderBottom: "1px solid #3a3a28",
-    padding: "24px 24px 20px",
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-  },
-  logoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: "50%",
-    background: "#c8a96e",
-    color: "#1a1a0f",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 22,
-    fontFamily: "Georgia, serif",
-    fontWeight: "bold",
-    flexShrink: 0,
-  },
-  logoTitle: {
-    fontFamily: "Georgia, serif",
-    fontSize: 20,
-    color: "#c8a96e",
-    letterSpacing: "0.04em",
-  },
-  logoSub: {
-    fontSize: 10,
-    color: "#888",
-    letterSpacing: "0.12em",
-    marginTop: 2,
-  },
-  totalBadge: { marginLeft: "auto", textAlign: "right" },
-  totalLabel: {
-    fontSize: 10,
-    color: "#888",
-    letterSpacing: "0.1em",
-    textTransform: "uppercase",
-  },
-  totalAmount: {
-    fontSize: 24,
-    color: "#c8a96e",
-    fontFamily: "Georgia, serif",
-    fontWeight: "bold",
-  },
-  statsRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    borderBottom: "1px solid #2a2a1e",
-    background: "#1a1a10",
-  },
-  statBox: {
-    padding: "14px 8px",
-    textAlign: "center",
-    borderRight: "1px solid #2a2a1e",
-  },
-  statIcon: { fontSize: 16, marginBottom: 4 },
-  statValue: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#c8a96e",
-    fontFamily: "Georgia, serif",
-  },
-  statLabel: {
-    fontSize: 9,
-    color: "#666",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    marginTop: 2,
-  },
-  tabs: { display: "flex", borderBottom: "1px solid #2a2a1e" },
-  tab: {
-    flex: 1,
-    padding: "12px",
-    background: "transparent",
-    border: "none",
-    color: "#666",
-    fontSize: 13,
-    cursor: "pointer",
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    borderBottom: "2px solid transparent",
-    transition: "all 0.15s",
-  },
-  tabActive: { color: "#c8a96e", borderBottom: "2px solid #c8a96e" },
-  badge: {
-    background: "#c8a96e",
-    color: "#1a1a0f",
-    borderRadius: 10,
-    padding: "1px 6px",
-    fontSize: 10,
-    marginLeft: 6,
-    fontWeight: "bold",
-  },
-  actionRow: {
-    padding: "14px 24px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 10,
-    borderBottom: "1px solid #2a2a1e",
-  },
-  filterRow: { display: "flex", gap: 5, flexWrap: "wrap" },
-  filterBtn: {
-    padding: "4px 9px",
-    borderRadius: 20,
-    border: "1px solid",
-    fontSize: 11,
-    cursor: "pointer",
-    letterSpacing: "0.03em",
-    transition: "all 0.15s",
-  },
-  addBtn: {
-    background: "#c8a96e",
-    color: "#1a1a0f",
-    border: "none",
-    borderRadius: 6,
-    padding: "8px 18px",
-    fontSize: 13,
-    fontWeight: "bold",
-    cursor: "pointer",
-    letterSpacing: "0.04em",
-    whiteSpace: "nowrap",
-  },
-  formCard: {
-    margin: "14px 24px",
-    background: "#1e1e14",
-    border: "1px solid #3a3a28",
-    borderRadius: 10,
-    padding: 18,
-  },
-  formTitle: {
-    fontFamily: "Georgia, serif",
-    color: "#c8a96e",
-    fontSize: 16,
-    marginBottom: 14,
-    letterSpacing: "0.05em",
-  },
-  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  fieldGroup: { display: "flex", flexDirection: "column", gap: 4 },
-  label: {
-    fontSize: 10,
-    color: "#888",
-    letterSpacing: "0.1em",
-    textTransform: "uppercase",
-  },
-  input: {
-    background: "#2a2a18",
-    border: "1px solid #3a3a28",
-    borderRadius: 6,
-    color: "#e8e0d0",
-    padding: "8px 10px",
-    fontSize: 13,
-    outline: "none",
-    fontFamily: "inherit",
-  },
-  saveBtn: {
-    marginTop: 14,
-    background: "#c8a96e",
-    color: "#1a1a0f",
-    border: "none",
-    borderRadius: 6,
-    padding: "10px 24px",
-    fontSize: 13,
-    fontWeight: "bold",
-    cursor: "pointer",
-    width: "100%",
-    letterSpacing: "0.06em",
-  },
-  friendPicker: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 },
-  friendChip: {
-    padding: "5px 10px",
-    borderRadius: 16,
-    border: "1px solid",
-    fontSize: 12,
-    cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  summaryStrip: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "8px 24px",
-    fontSize: 12,
-    color: "#888",
-    borderBottom: "1px solid #2a2a1e",
-  },
-  empty: { textAlign: "center", padding: "56px 24px" },
-  emptyIcon: { fontSize: 40, marginBottom: 12 },
-  emptyText: { color: "#aaa", fontSize: 15, marginBottom: 6 },
-  emptyHint: { color: "#555", fontSize: 12 },
-  list: {
-    padding: "12px 24px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  card: {
-    background: "#1e1e14",
-    border: "1px solid #2e2e1e",
-    borderRadius: 8,
-    padding: "12px 14px",
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-  },
-  catIcon: { fontSize: 20, flexShrink: 0, width: 28, textAlign: "center" },
-  cardBody: { flex: 1, minWidth: 0 },
-  cardTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    gap: 8,
-  },
-  cardDesc: {
-    fontSize: 14,
-    color: "#e8e0d0",
-    fontWeight: 500,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  cardAmount: {
-    fontSize: 15,
-    fontFamily: "Georgia, serif",
-    fontWeight: "bold",
-    flexShrink: 0,
-  },
-  cardMeta: {
-    fontSize: 11,
-    color: "#666",
-    marginTop: 3,
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 4,
-  },
-  dot: { color: "#444" },
-  deleteBtn: {
-    background: "transparent",
-    border: "none",
-    color: "#444",
-    fontSize: 14,
-    cursor: "pointer",
-    padding: "4px 6px",
-    borderRadius: 4,
-    flexShrink: 0,
-  },
-  confirmDelete: { display: "flex", gap: 6, flexShrink: 0 },
-  confirmYes: {
-    background: "#6b1e1e",
-    color: "#f0a0a0",
-    border: "none",
-    borderRadius: 4,
-    padding: "4px 8px",
-    fontSize: 11,
-    cursor: "pointer",
-  },
-  confirmNo: {
-    background: "#2a2a18",
-    color: "#888",
-    border: "none",
-    borderRadius: 4,
-    padding: "4px 8px",
-    fontSize: 11,
-    cursor: "pointer",
-  },
-  friendAddRow: { display: "flex", gap: 10, marginBottom: 4 },
-  friendCard: {
-    background: "#1e1e14",
-    border: "1px solid #2e2e1e",
-    borderRadius: 8,
-    padding: "12px 14px",
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-  },
-  friendAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: "50%",
-    background: "#3a5a3a",
-    color: "#a0d0a0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 16,
-    fontWeight: "bold",
-    flexShrink: 0,
-  },
-  friendInfo: { flex: 1 },
-  friendName: { fontSize: 14, color: "#e8e0d0", fontWeight: 500 },
-  friendStats: { fontSize: 11, color: "#666", marginTop: 3 },
-};
