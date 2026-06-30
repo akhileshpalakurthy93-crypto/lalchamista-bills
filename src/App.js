@@ -44,23 +44,39 @@ export default function App() {
 
   function loadData() {
     try {
-      const b = localStorage.getItem(STORAGE_KEY);
-      if (b) setBills(JSON.parse(b));
-    } catch { setBills([]); }
-    try {
-      const f = localStorage.getItem(FRIENDS_KEY);
-      if (f) setFriends(JSON.parse(f));
-    } catch { setFriends([]); }
+      if (typeof localStorage !== 'undefined') {
+        const b = localStorage.getItem(STORAGE_KEY);
+        if (b) setBills(JSON.parse(b));
+        const f = localStorage.getItem(FRIENDS_KEY);
+        if (f) setFriends(JSON.parse(f));
+      }
+    } catch (e) {
+      console.log("Storage error:", e);
+      setBills([]);
+      setFriends([]);
+    }
     setLoading(false);
   }
 
   function saveBills(updated) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.log("Save error:", e);
+    }
     setBills(updated);
   }
 
   function saveFriends(updated) {
-    localStorage.setItem(FRIENDS_KEY, JSON.stringify(updated));
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(FRIENDS_KEY, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.log("Save error:", e);
+    }
     setFriends(updated);
   }
 
