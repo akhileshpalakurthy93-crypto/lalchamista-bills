@@ -42,25 +42,25 @@ export default function App() {
 
   useEffect(() => { loadData(); }, []);
 
-  async function loadData() {
+  function loadData() {
     try {
-      const b = await window.storage.get(STORAGE_KEY);
-      if (b?.value) setBills(JSON.parse(b.value));
+      const b = localStorage.getItem(STORAGE_KEY);
+      if (b) setBills(JSON.parse(b));
     } catch { setBills([]); }
     try {
-      const f = await window.storage.get(FRIENDS_KEY);
-      if (f?.value) setFriends(JSON.parse(f.value));
+      const f = localStorage.getItem(FRIENDS_KEY);
+      if (f) setFriends(JSON.parse(f));
     } catch { setFriends([]); }
     setLoading(false);
   }
 
-  async function saveBills(updated) {
-    await window.storage.set(STORAGE_KEY, JSON.stringify(updated));
+  function saveBills(updated) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     setBills(updated);
   }
 
-  async function saveFriends(updated) {
-    await window.storage.set(FRIENDS_KEY, JSON.stringify(updated));
+  function saveFriends(updated) {
+    localStorage.setItem(FRIENDS_KEY, JSON.stringify(updated));
     setFriends(updated);
   }
 
@@ -409,19 +409,4 @@ const styles = {
   card: { background: "#1e1e14", border: "1px solid #2e2e1e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 },
   catIcon: { fontSize: 20, flexShrink: 0, width: 28, textAlign: "center" },
   cardBody: { flex: 1, minWidth: 0 },
-  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 },
-  cardDesc: { fontSize: 14, color: "#e8e0d0", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  cardAmount: { fontSize: 15, fontFamily: "Georgia, serif", fontWeight: "bold", flexShrink: 0 },
-  cardMeta: { fontSize: 11, color: "#666", marginTop: 3, display: "flex", flexWrap: "wrap", gap: 4 },
-  dot: { color: "#444" },
-  deleteBtn: { background: "transparent", border: "none", color: "#444", fontSize: 14, cursor: "pointer", padding: "4px 6px", borderRadius: 4, flexShrink: 0 },
-  confirmDelete: { display: "flex", gap: 6, flexShrink: 0 },
-  confirmYes: { background: "#6b1e1e", color: "#f0a0a0", border: "none", borderRadius: 4, padding: "4px 8px", fontSize: 11, cursor: "pointer" },
-  confirmNo: { background: "#2a2a18", color: "#888", border: "none", borderRadius: 4, padding: "4px 8px", fontSize: 11, cursor: "pointer" },
-  friendAddRow: { display: "flex", gap: 10, marginBottom: 4 },
-  friendCard: { background: "#1e1e14", border: "1px solid #2e2e1e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 },
-  friendAvatar: { width: 36, height: 36, borderRadius: "50%", background: "#3a5a3a", color: "#a0d0a0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: "bold", flexShrink: 0 },
-  friendInfo: { flex: 1 },
-  friendName: { fontSize: 14, color: "#e8e0d0", fontWeight: 500 },
-  friendStats: { fontSize: 11, color: "#666", marginTop: 3 },
-};
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "baseline",
